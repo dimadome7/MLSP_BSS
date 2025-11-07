@@ -55,6 +55,7 @@ samples_R = []
 
 for path in full_sample_paths:
     y, sr = librosa.load(path, mono=False, sr=None)
+    y = y / np.max(np.abs(y)) if np.max(np.abs(y)) > 0 else y
     samples.append(y)
     samples_L.append(y[0,:])
     samples_R.append(y[1,:])
@@ -106,8 +107,8 @@ H_R = []
 epsilon = 1e-9
 
 # create NMF model
-n_components = 50 # between 30-60
-model = NMF(n_components=n_components, init='random', random_state=0, max_iter=1000, solver='mu', beta_loss='itakura-saito')
+n_components = 30 # between 30-60
+model = NMF(n_components=n_components, init='random', random_state=0, max_iter=2000, solver='mu', beta_loss='itakura-saito', l1_ratio=0.0)
 
 for i in tqdm.tqdm(range(n_samples)):
 
@@ -153,6 +154,27 @@ HOP_LENGTH_forbins = 512
 # outcomes
 y_vocals_final = []
 
+def get_harmonicity_score(spectrum, n_harmonics=5):
+    """
+    Calculates a simple harmonicity score for a given spectral component.
+    """
+    # Find the peak frequency (potential fundamental)
+    fundamental_idx = np.argmax(spectrum)
+    if fundamental_idx == 0:
+        return 0.0
+
+    score = 0
+    # Check for energy at harmonic multiples
+    for i in range(2, n_harmonics + 1):
+        harmonic_idx = fundamental_idx * i
+        if harmonic_idx < len(spectrum):
+            # Add energy found at harmonic locations
+            score += spectrum[harmonic_idx]
+        else:
+            break
+    
+    # Normalize by the fundamental's magnitude
+    return score / (spectrum[fundamental_idx] + 1e-8)
 # perform analysis on each sample track
 for i in tqdm.tqdm(range(n_samples)):
 
@@ -181,13 +203,15 @@ for i in tqdm.tqdm(range(n_samples)):
 
         # spectral flatness tends to be low for speech (peaky / noisy)
         flatness = spectral_flattness(W[i][:,k])
-        is_not_flat = flatness < 0.4
+        is_not_flat = flatness < 0.2
 
         # I'm still very unhappy with the frequency cue implementation - I want to find ways to see if I can capture how
         # the energy of a vocal changes over the frequency spectrum over time, rather than a static centroid. 
 
         # Decision
-        if is_center_panned and is_vocal_frequency:
+        harmonicity_score = get_harmonicity_score(basis_spectrum)
+        is_harmonic = harmonicity_score > 0.
+        if is_center_panned and is_vocal_frequency and is_not_flat:
             vocal_components.append(k)
         else:
             instrumental_components.append(k)
