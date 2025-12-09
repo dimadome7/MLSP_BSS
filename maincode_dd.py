@@ -112,19 +112,31 @@ model = NMF(n_components=n_components, init='random', random_state=0, max_iter=2
 
 for i in tqdm.tqdm(range(n_samples)):
 
-    X_mono = mag_mono[i].T + epsilon
+    # PREVIOUS APPROACH (Sum to Mono):
+    # X_mono = mag_mono[i].T + epsilon
+    # model.fit(X_mono)
+    # W_learned = model.components_.T 
+    # H_left_T = model.transform(mag_L[i].T + epsilon)
+    # H_right_T = model.transform(mag_R[i].T + epsilon)
+
+    # NEW APPROACH - we stack and average activations:
+    
     X_left = mag_L[i].T + epsilon
     X_right = mag_R[i].T + epsilon
-
-    # perform NMF on mono signal
-    model.fit(X_mono)
-
-    # As we're assuming no elements that phase cancel out completely
-    # aka no 'close to negative 1' correlation for any elements of the track.
+    
+    # Stack inputs: (2 * Time_Frames, Freq_Bins)
+    X_stacked = np.vstack((X_left, X_right))
+    
+    # Fit on the stacked data
+    W_activation_stacked = model.fit_transform(X_stacked)
+    
+    # model.components_ are the basis vectors (Components, Freq)
     W_learned = model.components_.T 
-
-    H_left_T = model.transform(X_left)
-    H_right_T = model.transform(X_right)
+    
+    # Split the stacked activations back into Left and Right components
+    n_frames = X_left.shape[0]
+    H_left_T = W_activation_stacked[:n_frames, :]
+    H_right_T = W_activation_stacked[n_frames:, :]
 
     H_left = H_left_T.T
     H_right = H_right_T.T
@@ -133,8 +145,7 @@ for i in tqdm.tqdm(range(n_samples)):
     H_L.append(H_left)
     H_R.append(H_right)
 
-# so with H_left and right, I'm saying that we're using the bases in W learned from the mono mix
-# and we're seeing how much of those components are present in the left and right channels respectively.
+# With H_left and right, we now have activations derived jointly from the specific channel data
 print("NMF factorization done.")
 
 ####################################################################################################
@@ -154,27 +165,51 @@ HOP_LENGTH_forbins = 512
 # outcomes
 y_vocals_final = []
 
-def get_harmonicity_score(spectrum, n_harmonics=5):
-    """
-    Calculates a simple harmonicity score for a given spectral component.
-    """
-    # Find the peak frequency (potential fundamental)
-    fundamental_idx = np.argmax(spectrum)
-    if fundamental_idx == 0:
-        return 0.0
+# def get_harmonicity_score(spectrum, n_harmonics=5):
+#     """
+#     Calculates a simple harmonicity score for a given spectral component.
+#     """
+#     # Find the peak frequency (potential fundamental)
+#     fundamental_idx = np.argmax(spectrum)
+#     if fundamental_idx == 0:
+#         return 0.0
 
-    score = 0
-    # Check for energy at harmonic multiples
-    for i in range(2, n_harmonics + 1):
-        harmonic_idx = fundamental_idx * i
-        if harmonic_idx < len(spectrum):
-            # Add energy found at harmonic locations
-            score += spectrum[harmonic_idx]
-        else:
-            break
+#     score = 0
+#     # Check for energy at harmonic multiples
+#     for i in range(2, n_harmonics + 1):
+#         harmonic_idx = fundamental_idx * i
+#         if harmonic_idx < len(spectrum):
+#             # Add energy found at harmonic locations
+#             score += spectrum[harmonic_idx]
+#         else:
+#             break
     
-    # Normalize by the fundamental's magnitude
-    return score / (spectrum[fundamental_idx] + 1e-8)
+#     # Normalize by the fundamental's magnitude
+#     return score / (spectrum[fundamental_idx] + 1e-8)
+
+####################################################################################################
+# Helper Functions (Updated)
+####################################################################################################
+#updated function
+def get_harmonicity_score(spectrum, n_harmonics=4):
+    
+    # Calculating harmonicity using Harmonic Product Spectrum - this should eb more robust than simple peak picking 
+    # because it detects the structure of harmonics even if the fundamental is weak.
+    
+    spec_norm = spectrum / (np.max(spectrum) + 1e-9)
+    
+    hps = np.copy(spec_norm)
+    
+    for h in range(2, n_harmonics + 1):
+        decimated = spec_norm[::h] 
+        hps = hps[:len(decimated)]
+        hps *= decimated
+    #essentially multiplying downsampled versions of the spectrum - noise harmonics will be less likely to align
+    peak_hps = np.max(hps)
+    mean_hps = np.mean(hps) + 1e-9
+    
+    return peak_hps / mean_hps
+
 # perform analysis on each sample track
 for i in tqdm.tqdm(range(n_samples)):
 
@@ -190,10 +225,9 @@ for i in tqdm.tqdm(range(n_samples)):
         # Stereo field
         energy_left = np.sum(H_L[i][k, :])
         energy_right = np.sum(H_R[i][k, :])
-        panning_diff = np.abs(energy_left - energy_right) / (energy_left + energy_right + 1e-6) # to prevent a 
-        # division by zero if that element has complete negative phase correlation.
-
-        # Dividing by mono energy normalzes panning diff to between 0 and 1.
+        panning_diff = np.abs(energy_left - energy_right) / (energy_left + energy_right + 1e-6) 
+        
+        # Dividing by total energy normalizes panning diff to between 0 and 1.
         is_center_panned = panning_diff < panning_threshold
 
         # Frequency filtering
@@ -205,12 +239,10 @@ for i in tqdm.tqdm(range(n_samples)):
         flatness = spectral_flattness(W[i][:,k])
         is_not_flat = flatness < 0.2
 
-        # I'm still very unhappy with the frequency cue implementation - I want to find ways to see if I can capture how
-        # the energy of a vocal changes over the frequency spectrum over time, rather than a static centroid. 
-
         # Decision
         harmonicity_score = get_harmonicity_score(basis_spectrum)
-        is_harmonic = harmonicity_score > 0.
+        is_harmonic = harmonicity_score > 0. # Maybe push this up to 5 or so? by testing it on the dataset?
+        
         if is_center_panned and is_vocal_frequency and is_not_flat:
             vocal_components.append(k)
         else:
@@ -230,8 +262,6 @@ for i in tqdm.tqdm(range(n_samples)):
     mag_right_vocal_recon = W_vocal @ H_right_vocal
     mag_left_instrumental_recon = W_instrumental @ H_left_instrumental
     mag_right_instrumental_recon = W_instrumental @ H_right_instrumental
-
-    # I'm reconstructing instruments as well just for checking results to optimize our model. 
 
     # creating soft masks (Wiener-style) - basically minimizing MSE
     mag_total_vocal = mag_left_vocal_recon**2 + mag_right_vocal_recon**2
