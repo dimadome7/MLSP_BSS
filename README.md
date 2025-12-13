@@ -9,4 +9,6 @@ Code instructions:
 2. Install dataset Python library: pip install musdb
 3. Convert dataset to .wav: musdbconvert path/to/musdb-stems-root musdb18_wav
 5. Visit sigstep-mus-db Github for more info: https://github.com/sigsep/sigsep-mus-db
-6. Recover vocal recordings from different songs in the dataset.
+6. Ensure python>=3.11
+7. Use run.sh to install requirements and perform vocal separation on the dataset.
+8. To compute vocal for a subset of tracks, edit config['n_samples'] and config['use_subset'] in main.py
