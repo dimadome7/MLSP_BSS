@@ -22,8 +22,8 @@ config = {
     # dataset
     'root': 'musdb18_wav/train',
     'out_dir': 'outputs',
-    'use_subset': False,
-    'n_samples': 1,
+    'use_subset': True,
+    'n_samples': 2,
     'n_fft': 2048,
     'hop': 512,
     'random_seed': 100,
@@ -434,12 +434,12 @@ for i in range(n_samples):
 
     # compute our model metrics
     model_metrics = compute_bss_metrics(v_ref, v_hat)
-    print(f'model metrics:  SDR={model_metrics['SDR']:.3f}, SAR={model_metrics['SAR']:.3f}')
+    print(f"model metrics:  SDR={model_metrics['SDR']:.3f}, SAR={model_metrics['SAR']:.3f}")
 
     # performance using mixture as estimate
     mix_stereo, _ = librosa.load(full_sample_paths[i], mono=False, sr=None)
     mixture_metrics = compute_bss_metrics(v_ref, mix_stereo)
-    print(f'mixture metrics:  SDR={mixture_metrics['SDR']:.3f}, SAR={mixture_metrics['SAR']:.3f}')
+    print(f"mixture metrics:  SDR={mixture_metrics['SDR']:.3f}, SAR={mixture_metrics['SAR']:.3f}")
 
     # performance of hpss baseline
     harm = np.zeros_like(mix_stereo)
@@ -449,7 +449,7 @@ for i in range(n_samples):
         harm[ch] = y_harm
 
     hpss_metrics = compute_bss_metrics(v_ref, harm)
-    print(f'hpss metrics:  SDR={hpss_metrics['SDR']:.3f}, SAR={hpss_metrics['SAR']:.3f}\n')
+    print(f"hpss metrics:  SDR={hpss_metrics['SDR']:.3f}, SAR={hpss_metrics['SAR']:.3f}\n")
 
     # log all statistics for this track:
     results.append({
