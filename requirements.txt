@@ -1,0 +1,11 @@
+numpy
+os
+random
+tqdm
+sklearn.decomposition
+scipy.ndimage
+soundfile
+librosa>=0.9.0
+museval
+warnings
+csv
