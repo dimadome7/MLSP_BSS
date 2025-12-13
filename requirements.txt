@@ -1,8 +1,7 @@
 numpy
-random
 tqdm
-sklearn.decomposition
-scipy.ndimage
+scikit-learn
+scipy
 soundfile
 librosa>=0.9.0
 museval
