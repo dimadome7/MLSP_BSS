@@ -11,23 +11,23 @@ Code instructions:
 5.  Visit sigstep-mus-db Github for more info: https://github.com/sigsep/sigsep-mus-db
 6.  Ensure file format follows this structure:
 
-    musdb18_wav:\n
-        train:
-            A Classic Education - NightOwl:
-                accompaniment.wav
-                bass.wav
-                drums.wav
-                linear_mixture.wav
-                mixture.wav
-                other.wav
-                vocals.wav
-            .
-            .
-            .
-        test:
-            .
-            .
-            .
+musdb18_wav:
+    train:
+        A Classic Education - NightOwl:
+            accompaniment.wav
+            bass.wav
+            drums.wav
+            linear_mixture.wav
+            mixture.wav
+            other.wav
+            vocals.wav
+        .
+        .
+        .
+    test:
+        .
+        .
+        .
 
 7.  Ensure python>=3.11
 8.  Use ./run.sh to install requirements and perform vocal separation on the dataset.
