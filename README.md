@@ -11,7 +11,7 @@ Code instructions:
 5.  Visit sigstep-mus-db Github for more info: https://github.com/sigsep/sigsep-mus-db
 6.  Ensure file format follows this structure:
 
-    musdb18_wav:
+    musdb18_wav:\n
         train:
             A Classic Education - NightOwl:
                 accompaniment.wav
